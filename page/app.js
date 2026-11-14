@@ -4,6 +4,7 @@ import { ICON_LABS } from './icon-index.js';
 import { PRICES } from './prices.js';
 import {
   evidenceFootnote,
+  budgetTask,
   evidenceLabel,
   filterModels,
   formatContext,
@@ -16,7 +17,6 @@ import {
   panelRows,
   recommendationSentence,
   sortModels,
-  sourceNote,
   taskBasis,
   taskIds,
   taskScoreMap,
@@ -111,6 +111,7 @@ const state = {
   theme: savedPreferences.theme,
   currency: savedPreferences.currency,
   task: null,
+  budgetIndex: 1,
   expandedId: null,
   evidenceTask: null,
   evidenceFor: null,
@@ -265,7 +266,7 @@ const dropdowns = {
       { value: 'latest', label: '最新发布' },
       { value: 'context', label: '上下文' },
       { value: 'name', label: '名称' },
-      ...(hasRankings() ? [{ value: 'task', label: '按推荐分' }] : []),
+      ...(hasRankings() ? [{ value: 'task', label: '按榜单分数' }] : []),
     ],
     currentValue: () => state.sort,
     onSelect(value) {
@@ -509,7 +510,7 @@ function evidenceMarkup(model) {
       seen.add(sourceId);
       return true;
     }).map((sourceId) => `<li><span>${escapeHtml(evidenceLabel(sourceId, task, RANKINGS.sources))}</span><span>${escapeHtml(formatSignal(sourceId, row.evidence[sourceId]))}</span></li>`).join('');
-    return `<div class="detail-item detail-evidence"><dt>推荐依据 · ${escapeHtml(task.label)}</dt><dd><ul class="evidence-list">${items}</ul><p class="evidence-note">${escapeHtml(evidenceFootnote(RANKINGS.asOf))}</p></dd></div>`;
+    return `<div class="detail-item detail-evidence"><dt>推荐依据 · ${escapeHtml(task.label)}</dt><dd><ul class="evidence-list">${items}</ul>${row.variant ? `<p class="evidence-note">评测配置：${escapeHtml(row.variant)}</p>` : ''}<p class="evidence-note">${escapeHtml(evidenceFootnote(RANKINGS.asOf, task))}</p></dd></div>`;
   }).join('');
 }
 
@@ -519,7 +520,7 @@ function rowFor(model) {
   const ranked = rankRow(id);
   const expanded = state.expandedId === id;
   const badge = ranked ? `<span class="rank-badge" aria-hidden="true">${escapeHtml(ranked.rank)}</span>` : '';
-  const score = ranked ? `<span class="task-score">推荐分 ${escapeHtml(ranked.score)}</span>` : '';
+  const score = ranked ? `<span class="task-score">${activeTask()?.scoreKind === 'elo' ? '网页 Elo' : 'AA 指数'} ${escapeHtml(ranked.score)}</span>` : '';
   const detailId = `detail-${id.replace(/[^A-Za-z0-9_-]+/g, '-')}`;
   return `
     <article class="model-card${expanded ? ' is-expanded' : ''}" data-model-id="${escapeHtml(id)}">
@@ -564,37 +565,46 @@ function featuredMarkup() {
     </article>`;
 }
 
+function budgetOptions() {
+  return state.currency === 'cny' ? [10, 30, 100] : [1, 5, 20];
+}
+
 function boardMarkup(key, task) {
   const panel = panelRows(task.models, 5);
   const rows = panel.rows.map((row) => {
     const model = modelById(row.id);
     if (!model) return '';
-    const metric = headlineText(row, task);
+    const metric = headlineText(row, task) + (key === 'value' ? ` · ${state.currency === 'cny' ? '¥' : '$'}${row.cost.toFixed(2)}` : '');
+    const cost = key === 'value' ? `<span class="board-score-sub">${state.currency === 'cny' ? '¥' : '$'}${row.cost.toFixed(2)} / M</span>` : '';
     const name = String(model.name || row.id);
     return `<button class="board-row" type="button" data-action="reveal" data-id="${escapeHtml(row.id)}" data-task="${escapeHtml(key)}" aria-label="${escapeHtml(`${name}，${metric}，查看详情`)}">
         <span class="board-rank" aria-hidden="true">${escapeHtml(row.rank)}</span>
         ${iconMarkup(model)}
         <span class="board-name">${escapeHtml(name)}</span>
-        <span class="board-metric">${escapeHtml(metric)}</span>
-        <span class="board-detail">详情</span>
+        <span class="board-metric"><span class="board-score-main">${escapeHtml(row.score)}</span>${cost}</span>
+        <svg class="board-detail" aria-hidden="true" viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></svg>
       </button>`;
   }).join('');
+  const arrow = '<svg aria-hidden="true" viewBox="0 0 16 16"><path d="M3 8h10m-4-4 4 4-4 4"/></svg>';
   const more = panel.showAll
-    ? `<button class="board-all" type="button" data-action="show-task" data-task="${escapeHtml(key)}">查看全部 ${panel.total.toLocaleString('zh-CN')} 个 ›</button>`
+    ? `<button class="board-all" type="button" data-action="show-task" data-task="${escapeHtml(key)}" aria-label="查看${escapeHtml(task.label)}全部 ${panel.total} 个模型"><span>查看全部 ${panel.total.toLocaleString('zh-CN')} 个模型</span>${arrow}</button>`
     : '';
-  return `<section class="recommend-board"><header class="board-head"><span class="board-title">${escapeHtml(task.label)}最强</span><span class="board-source">${escapeHtml(sourceNote(task.sources, RANKINGS.sources))}</span></header>${rows}${more}</section>`;
+  const controls = key === 'value' ? `<div class="budget-controls" role="group" aria-label="每百万总 token 成本上限">${budgetOptions().map((value, i) => `<button type="button" data-action="budget" data-budget-index="${i}" aria-pressed="${i === state.budgetIndex}">≤ ${state.currency === 'cny' ? '¥' : '$'}${value}</button>`).join('')}</div>` : `<div class="board-columns" aria-hidden="true"><span>模型</span><span>${key === 'frontend' ? '网页 Elo' : '综合指数'}</span></div>`;
+  const title = key === 'value' ? '性价比' : key === 'frontend' ? '前端 / 网页' : task.label;
+  const note = key === 'value' ? '输入 / 输出 3:1 · 每百万总 token 成本' : key === 'frontend' ? '网页生成偏好 · 不代表全部编程能力' : '按 AA 综合智能指数排序';
+  return `<section class="recommend-board" aria-labelledby="board-${escapeHtml(key)}"><header class="board-header"><div class="board-head"><h2 id="board-${escapeHtml(key)}" class="board-title">${escapeHtml(title)}</h2><span class="board-count">${key === 'value' ? '预算内最强' : `${panel.total} 个模型`}</span></div><p class="board-note" title="${escapeHtml(note)}">${escapeHtml(note)}</p>${controls}</header><div class="board-rows">${rows || '<p class="board-empty">该预算下暂无已评测且有标价的模型，试试提高预算。</p>'}</div>${more}</section>`;
 }
 
 function renderRecommend() {
   if (!recommendElement) return;
-  const tasks = Object.entries(RANKINGS?.tasks ?? {}).filter(([, task]) => Array.isArray(task?.models) && task.models.length > 0);
+  const tasks = Object.entries(RANKINGS?.tasks ?? {}).filter(([key, task]) => Array.isArray(task?.models) && (task.models.length > 0 || key === 'value'));
   if (!tasks.length) {
     recommendElement.hidden = true;
     recommendElement.innerHTML = '';
     return;
   }
   recommendElement.hidden = false;
-  recommendElement.innerHTML = `<p class="recommend-kicker">榜单快照 <time datetime="${escapeHtml(RANKINGS.asOf)}">${escapeHtml(RANKINGS.asOf)}</time></p><div class="recommend-panels">${featuredMarkup()}${tasks.map(([key, task]) => boardMarkup(key, task)).join('')}</div>`;
+  recommendElement.innerHTML = `<p class="recommend-kicker">榜单抓取于 <time datetime="${escapeHtml(RANKINGS.asOf)}">${escapeHtml(RANKINGS.asOf)}</time></p><div class="recommend-panels">${featuredMarkup()}${tasks.map(([key, task]) => boardMarkup(key, task)).join('')}</div>`;
 }
 
 function currentModels() {
@@ -648,6 +658,9 @@ function revealModel(id, taskKey, returnFocus) {
 }
 
 function render() {
+  if (RANKINGS?.tasks?.intelligence) {
+    RANKINGS.tasks.value = budgetTask(RANKINGS.tasks.intelligence, PRICES, budgetOptions()[state.budgetIndex], state.currency);
+  }
   listElement.classList.toggle('is-list', state.layout === 'list');
   renderRecommend();
   const filtered = currentModels();
@@ -723,6 +736,15 @@ taskPill?.addEventListener('click', () => exitTask());
 recommendElement?.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button || !recommendElement.contains(button)) return;
+  if (button.dataset.action === 'budget') {
+    const index = Number(button.dataset.budgetIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= budgetOptions().length) return;
+    state.budgetIndex = index;
+    state.visibleCount = PAGE_SIZE;
+    render();
+    recommendElement.querySelector(`[data-budget-index="${index}"]`)?.focus();
+    return;
+  }
   if (button.dataset.action === 'show-task') {
     enterTask(button.dataset.task);
     return;

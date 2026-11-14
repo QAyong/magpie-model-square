@@ -114,7 +114,9 @@ export function taskScoreMap(rankings, taskKey = null) {
   const map = new Map();
   const entries = taskKey
     ? [[taskKey, rankings?.tasks?.[taskKey]]]
-    : Object.entries(rankings?.tasks ?? {});
+    : rankings?.tasks?.intelligence
+      ? [['intelligence', rankings.tasks.intelligence]]
+      : Object.entries(rankings?.tasks ?? {});
   for (const [, task] of entries) {
     for (const model of task?.models ?? []) {
       const score = Number(model?.score);
@@ -157,8 +159,8 @@ export function formatSignal(sourceId, value, mode = 'detail') {
   const text = Number.isInteger(number) ? String(number) : String(Math.round(number * 10) / 10);
   if (sourceId === 'swe-bench') return mode === 'panel' ? `SWE ${text}%` : `${text}%`;
   if (sourceId === 'aider') return mode === 'panel' ? `Aider ${text}%` : `${text}%（正确率）`;
-  if (sourceId === 'lmarena') return mode === 'panel' ? `Elo ${text}` : text;
-  if (sourceId === 'aa-coding') return mode === 'panel' ? `AA ${text}` : text;
+  if (sourceId === 'lmarena' || sourceId === 'design-arena-website') return mode === 'panel' ? `Elo ${text}` : text;
+  if (sourceId === 'aa-coding' || sourceId === 'aa-intelligence') return mode === 'panel' ? `AA ${text}` : text;
   return text;
 }
 
@@ -181,12 +183,32 @@ export function headlineText(model, task) {
   return formatSignal(sourceId, model.evidence[sourceId], 'panel');
 }
 
+export function budgetTask(intelligence, prices, budget, currency = 'cny') {
+  const rate = currency === 'cny' ? USD_CNY.rate : 1;
+  const models = (intelligence?.models ?? []).flatMap((row) => {
+    const price = prices[row.id];
+    if (!Number.isFinite(price?.input) || !Number.isFinite(price?.output) || price.input <= 0 || price.output <= 0) return [];
+    const cost = (price.input * 3 + price.output) / 4 * rate;
+    if (cost > budget || !Number.isFinite(row.score)) return [];
+    return [{ ...row, cost }];
+  }).sort((a, b) => b.score - a.score || a.cost - b.cost || a.id.localeCompare(b.id, 'en'));
+  for (let i = 0; i < models.length; i++) models[i].rank = i && models[i].score === models[i - 1].score ? models[i - 1].rank : i + 1;
+  const unit = currency === 'cny' ? '¥' : '$';
+  return {
+    label: '性价比 · 预算内最强', headline: 'aa-intelligence', sources: ['aa-intelligence'], scoreKind: 'budget', models,
+    description: `每百万总 token 估算成本 ≤ ${unit}${budget}，输入:输出 = 3:1；仅纳入同时有 AA 成绩和非零输入、输出标价的模型。价格为目录快照，未计缓存折扣与额外推理用量`,
+  };
+}
+
 export function taskBasis(task, sources, asOf) {
   const names = (task?.sources ?? []).map((id) => sources?.[id]?.name).filter(Boolean);
   const basis = names.length ? `依据 ${names.join('/')}` : '';
-  return [`按「${task?.label ?? ''}」推荐`, basis, asOf ? `数据截至 ${asOf}` : ''].filter(Boolean).join(' · ');
+  return [`按「${task?.label ?? ''}」推荐`, basis, asOf ? `${['raw', 'elo', 'budget'].includes(task?.scoreKind) ? '抓取于' : '数据截至'} ${asOf}` : ''].filter(Boolean).join(' · ');
 }
 
-export function evidenceFootnote(asOf) {
+export function evidenceFootnote(asOf, task = null) {
+  if (task?.scoreKind === 'elo') return `Design Arena 网页生成偏好 Elo，经 OpenRouter 转发；不代表全部编程能力 · 抓取于 ${asOf}`;
+  if (task?.scoreKind === 'budget') return `${task.description}；按 AA 原始分排序，不计算能力分除以价格 · AA 抓取于 ${asOf}`;
+  if (task?.scoreKind === 'raw') return `AA 综合智能指数原始分；同型号取已收录配置的最高分 · 抓取于 ${asOf}`;
   return `推荐分为榜内相对分，非绝对能力 · 截至 ${asOf}`;
 }

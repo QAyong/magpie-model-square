@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { pickFeatured, scoreTask } from '../scripts/rankings-lib.mjs';
 import {
   evidenceFootnote,
+  budgetTask,
+  taskScoreMap,
   filterModels,
   formatContext,
   formatPrice,
@@ -180,6 +182,8 @@ test('headline and source note use the board signal, not a bare score', () => {
   assert.equal(headlineText(task.models[0], task), 'SWE 74.5%');
   assert.equal(formatSignal('aider', 55.1, 'detail'), '55.1%（正确率）');
   assert.equal(formatSignal('lmarena', 1520, 'panel'), 'Elo 1520');
+  assert.equal(formatSignal('aa-intelligence', 54.6, 'panel'), 'AA 54.6');
+  assert.equal(evidenceFootnote('2026-11-14', { scoreKind: 'raw' }), 'AA 综合智能指数原始分；同型号取已收录配置的最高分 · 抓取于 2026-11-14');
   assert.equal(sourceNote(task.sources, rankings.sources), 'SWE-bench 等');
   assert.equal(evidenceFootnote(rankings.asOf), '推荐分为榜内相对分，非绝对能力 · 截至 2026-11-14');
 });
@@ -196,6 +200,31 @@ test('scores renormalize missing signals and ties share a rank', () => {
   ]);
   const tied = scoreTask({ 'swe-bench': { a: 10, b: 10 } }, { 'swe-bench': 1 });
   assert.deepEqual(tied.models.map((model) => model.rank), [1, 1]);
+});
+
+test('budget board filters by blended token cost, excludes missing/zero prices and sorts by raw ability', () => {
+  const intelligence = { models: [
+    { id: 'a', score: 55, evidence: { 'aa-intelligence': 55 } },
+    { id: 'b', score: 60 }, { id: 'c', score: 99 }, { id: 'd', score: 100 }, { id: 'e', score: 101 },
+  ] };
+  const prices = { a: { input: 2, output: 10 }, b: { input: 1, output: 5 }, c: { input: 10, output: 30 }, d: { input: 0, output: 1 } };
+  const cheap = budgetTask(intelligence, prices, 3, 'usd');
+  assert.deepEqual(cheap.models.map(m => m.id), ['b']);
+  const larger = budgetTask(intelligence, prices, 4, 'usd');
+  assert.deepEqual(larger.models.map(m => m.id), ['b', 'a']);
+  assert.equal(larger.models[1].cost, 4);
+  assert.deepEqual(budgetTask(intelligence, prices, 30, 'cny').models.map(m => m.id), ['b', 'a']);
+  assert.equal(budgetTask(intelligence, prices, 0, 'usd').models.length, 0);
+});
+
+test('different board scales never mix in default model sorting', () => {
+  const scores = taskScoreMap({ tasks: {
+    intelligence: { models: [{ id: 'a', score: 60 }, { id: 'b', score: 55 }] },
+    frontend: { models: [{ id: 'b', score: 1400 }] },
+  } });
+  assert.equal(scores.get('b'), 55);
+  assert.equal(formatSignal('design-arena-website', 1315, 'panel'), 'Elo 1315');
+  assert.match(evidenceFootnote('2026-11-14', { scoreKind: 'elo' }), /不代表全部编程能力/);
 });
 
 test('featured pick needs two tasks and breaks ties by average score', () => {

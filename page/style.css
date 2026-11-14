@@ -201,14 +201,18 @@ h1 {
 .dropdown-option:hover { background: var(--hover); }
 .dropdown-option[aria-selected="true"] { background: var(--accent-soft); }
 
-.recommend { margin: 0 0 18px; }
-.recommend-kicker { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 550; }
-.recommend-panels { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.recommend { margin: 0 0 20px; container-type: inline-size; }
+.recommend-kicker { margin: 0 0 10px 2px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.recommend-panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; border-radius: 14px; background: var(--card); box-shadow: var(--card-edge); }
 .recommend-feature, .recommend-board { border-radius: 12px; background: var(--card); box-shadow: var(--card-edge); }
 .recommend-feature { display: flex; flex: 1 1 260px; flex-direction: column; gap: 8px; max-width: 340px; padding: 12px; }
-.recommend-board { display: flex; flex: 1 1 320px; flex-direction: column; gap: 2px; min-width: min(100%, 280px); padding: 10px 12px 12px; }
-.feature-kicker, .board-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: 12px; }
-.feature-kicker strong, .board-title { color: var(--fg); font-weight: 600; }
+.recommend-board { display: flex; flex-direction: column; min-width: 0; padding: 16px; border-radius: 0; background: transparent; box-shadow: none; }
+.recommend-board + .recommend-board { border-inline-start: 1px solid var(--line-2); }
+.feature-kicker, .board-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: 12px; }
+.feature-kicker strong, .board-title { margin: 0; color: var(--fg); font-size: 14px; font-weight: 650; line-height: 24px; }
+.board-count { color: var(--fg-2); font-size: 11px; white-space: nowrap; }
+.board-header { display: grid; gap: 4px; margin-bottom: 4px; }
+.board-columns { display: flex; justify-content: space-between; align-items: center; height: 32px; padding: 0 20px 0 4px; color: var(--fg-2); font-size: 11px; }
 .feature-identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .feature-blurb { margin: 0; color: var(--fg-2); font-size: 12.5px; line-height: 1.5; }
 .feature-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0; }
@@ -217,12 +221,34 @@ h1 {
 .feature-actions { display: flex; gap: 8px; }
 .feature-actions button, .board-all { min-height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--fg); font-size: 12px; }
 .feature-actions button:hover, .board-all:hover, .board-row:hover { background: var(--card-2); }
-.board-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 2px 4px; border: 0; border-radius: 7px; background: transparent; text-align: left; }
-.board-rank { width: 1.2em; flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.board-rows { flex: 1; }
+.board-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 4px; border: 0; border-radius: 7px; background: transparent; color: var(--fg); text-align: left; }
+.board-rank { width: 14px; flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; text-align: center; }
+.board-row:first-child .board-rank { color: var(--fg); font-weight: 650; }
 .board-name { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.board-metric { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.board-detail { flex: none; color: var(--accent); font-size: 12px; }
-.board-all { align-self: center; margin-top: 6px; border: 0; background: transparent; color: var(--accent); }
+.board-metric { display: grid; flex: none; justify-items: end; gap: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.board-score-main { color: var(--fg); font-size: 13px; font-weight: 600; line-height: 16px; }
+.board-score-sub { color: var(--fg-2); font-size: 10px; line-height: 12px; }
+.board-detail { width: 12px; height: 12px; flex: none; color: var(--faint); fill: none; stroke: currentColor; stroke-width: 1.5; }
+.board-row:hover .board-detail, .board-row:focus-visible .board-detail { color: var(--accent); }
+.board-all { display: flex; align-self: stretch; align-items: center; justify-content: space-between; min-height: 36px; margin-top: 8px; padding: 8px 4px 0; border: 0; border-top: 1px solid var(--line-2); border-radius: 0; background: transparent; color: var(--fg-2); font-size: 11px; }
+.board-all svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.board-all:hover { color: var(--accent); background: transparent; }
+.board-note { min-width: 0; margin: 0; overflow: hidden; color: var(--fg-2); font-size: 11px; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.board-empty { padding: 24px 4px; color: var(--fg-2); font-size: 12px; line-height: 1.6; }
+.budget-controls { display: flex; gap: 2px; align-items: center; width: fit-content; height: 32px; padding: 3px; border-radius: 8px; background: var(--pill); }
+.budget-controls button { min-height: 26px; padding: 3px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-2); font: inherit; font-size: 11px; line-height: 20px; }
+.budget-controls button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: var(--seg-edge); }
+.budget-controls button:hover { color: var(--fg); }
+.budget-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@container (max-width: 900px) {
+  .recommend-panels { grid-template-columns: 1fr; }
+  .recommend-board + .recommend-board { border-inline-start: 0; border-top: 1px solid var(--line-2); }
+  .board-note { white-space: normal; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board-row, .budget-controls button { transition: background-color .15s var(--ease), color .15s var(--ease); }
+}
 .recommend-board .logo-plate { width: 22px; height: 22px; border-radius: 6px; }
 .recommend-board .logo-img, .recommend-board .logo-glyph { width: 14px; height: 14px; }
 

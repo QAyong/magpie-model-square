@@ -12,7 +12,8 @@ Magpie 沙盒页面插件。概览、数量和进度见 `README.md`。
 - `page/currency.js` — 人民币汇率中间价；由同步脚本写入，没网时可以手改
 - `page/rankings.js` — 任务榜单；单行大对象，用脚本查询，不要整文件通读。缺失或没有任务时页首推荐区隐藏
 - `scripts/sync.mjs` — 拉取 models.dev 模型与价格、中国货币网中间价，重写上面三个数据文件
-- `scripts/sync-rankings.mjs` — 拉取 OpenRouter 上持续更新的 Artificial Analysis 编程指数；缺失时才用 Arena / SWE-bench / Aider，也可读 `data/manual-signals.json`，重写 `page/rankings.js`
+- `scripts/sync-rankings.mjs` — 同步 AA Intelligence Index 综合能力榜。配置 `AA_API_KEY`（或 `ARTIFICIAL_ANALYSIS_API_KEY`）时用官方免费分页 API；未配置时用 OpenRouter 转发，并注明渠道。`scripts/aa-rankings.mjs` 负责匹配与排序；旧 Coding Index 已停更，不再回退使用旧编程榜。
+- `scripts/frontend-rankings.mjs` — 同步 OpenRouter 转发的 Design Arena `models/website` 原始 Elo；不要混入 Agent、游戏、3D 或整体设计分。性价比榜由 `page/view.js` 的 `budgetTask` 按本地标价、3:1 输入输出与预算计算，按 AA 原始分排序；不同榜单分数不可混排。
 - `package.json` — 清单：`magpie.page`、`magpie.icon/name/summary`，`permissions` 为空
 - `LICENSE`、`THIRD-PARTY-NOTICES.md` — MIT 正文，以及 models.dev 与中间价的来源声明
 
@@ -27,6 +28,8 @@ Magpie 沙盒页面插件。概览、数量和进度见 `README.md`。
 | `node scripts/sync.mjs --dry-run` | 只打印会变什么，不写文件 |
 | `node scripts/sync-rankings.mjs` | 刷新任务榜单（页面仍离线） |
 | `node scripts/sync-rankings.mjs --dry-run` | 只打印榜单会收进哪些模型 |
+| `node --test scripts/aa-rankings.test.mjs` | 官方分页、版本一致性、匹配与原始分 |
+| `node --test scripts/frontend-rankings.test.mjs` | 网页 Elo 来源、范围和目录匹配 |
 
 ## Gotchas & Red Lines
 
@@ -35,6 +38,7 @@ Magpie 沙盒页面插件。概览、数量和进度见 `README.md`。
 - `category` 只按 models.dev 的 `type`：`image`、`video`、`speech` 与 `realtime`→`speech`、`transcription`、`embedding`、`reranking`→`rerank`，其余→`chat`。能看图的对话模型仍是 `chat`。
 - 「多模态」只加在 `chat` 上，且输入或输出含 `text` 以外的模态。
 - 价格是每百万 token 的美元 `input` / `output`。优先厂商自己的非零价；0 或缺失不要写入。不要给图像、视频编按张或按秒的价。
+- AA 综合能力榜保留原始分数（`scoreKind: raw`），不做 min–max。null 不上榜，真实 0 分保留；同型号取最高已收录配置。抓取日期不等于评测日期；OpenRouter 未提供指数版本时记 null。官方 Key 只用于同步环境，不能写入页面或快照；配置 Key 后请求失败要保留快照并报错，不静默换源。
 - 厂商别名：`zhipuai`/`zai`，`moonshotai`/`moonshot`，`google`/`google-vertex`，`alibaba`/`alibaba-cn`。
 - 厂商和排序用自绘下拉，文案是「厂商」。不要改回原生 `select`，也不要写回「实验室」。
 - `openai`、`xai`、`ai21`、`moonshotai` 的图标走 CSS mask，会随文字色变化。`brand-kimi-color.svg` 主体是白色，不能直接铺在白底上。
