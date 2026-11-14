@@ -86,3 +86,10 @@ test('price formatting shows input and output per million tokens', () => {
   assert.equal(formatPrice({ input: 0.15, output: 0.6 }), '$0.15 / $0.6');
   assert.equal(formatPrice(null), '未标价');
 });
+
+test('price formatting converts to yuan at the mid rate', () => {
+  assert.equal(formatPrice({ input: 4, output: 20 }, 'cny'), '¥26.86 / ¥134.30');
+  assert.equal(formatPrice({ input: 0.15, output: 0.6 }, 'cny'), '¥1.01 / ¥4.03');
+  assert.equal(formatPrice({ input: 0, output: 0 }, 'cny'), '未标价');
+  assert.equal(formatPrice(null, 'cny'), '未标价');
+});

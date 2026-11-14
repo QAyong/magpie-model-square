@@ -1,3 +1,5 @@
+import { USD_CNY } from './currency.js';
+
 const LAB_NAMES = Object.freeze({
   anthropic: 'Anthropic',
   openai: 'OpenAI',
@@ -65,11 +67,19 @@ function trimRate(value) {
   return number.toFixed(digits).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
-export function formatPrice(price) {
+// 人民币是汇率换算出来的估算，固定两位小数，不假装比美元原价更精确。
+function cnyRate(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return (number * USD_CNY.rate).toFixed(2);
+}
+
+export function formatPrice(price, currency = 'usd') {
   const input = trimRate(price?.input);
   const output = trimRate(price?.output);
   if (input == null || output == null) return '未标价';
   if (Number(price.input) <= 0 && Number(price.output) <= 0) return '未标价';
+  if (currency === 'cny') return `¥${cnyRate(price.input)} / ¥${cnyRate(price.output)}`;
   return `$${input} / $${output}`;
 }
 

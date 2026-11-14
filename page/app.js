@@ -1,4 +1,5 @@
 import { CATALOG, SNAPSHOT } from './catalog.js';
+import { USD_CNY } from './currency.js';
 import { ICON_LABS } from './icon-index.js';
 import { PRICES } from './prices.js';
 import { filterModels, formatContext, formatPrice, labFor, labs, sortModels } from './view.js';
@@ -46,9 +47,13 @@ const searchInput = $('#search');
 const categoryButtons = [...document.querySelectorAll('[data-category]')];
 const layoutButtons = [...document.querySelectorAll('[data-layout]')];
 const themeButtons = [...document.querySelectorAll('[data-theme-option]')];
+const currencyButtons = [...document.querySelectorAll('[data-currency]')];
+const rateNote = $('#rate-note');
+const rateDot = $('#rate-dot');
 const PREFERENCES_KEY = 'magpie-model-square';
 const validLayouts = new Set(['grid', 'list']);
 const validThemes = new Set(['light', 'system', 'dark']);
+const validCurrencies = new Set(['cny', 'usd']);
 
 function readPreferences() {
   try {
@@ -56,9 +61,10 @@ function readPreferences() {
     return {
       layout: validLayouts.has(saved?.layout) ? saved.layout : 'grid',
       theme: validThemes.has(saved?.theme) ? saved.theme : 'system',
+      currency: validCurrencies.has(saved?.currency) ? saved.currency : 'cny',
     };
   } catch {
-    return { layout: 'grid', theme: 'system' };
+    return { layout: 'grid', theme: 'system', currency: 'cny' };
   }
 }
 
@@ -70,14 +76,30 @@ const state = {
   sort: 'latest',
   layout: savedPreferences.layout,
   theme: savedPreferences.theme,
+  currency: savedPreferences.currency,
   visibleCount: PAGE_SIZE,
   expandedId: null,
 };
 
+// 用户自己改过之后，异步到达的宿主选项不再覆盖他的选择。
+let preferencesTouched = false;
+
 snapshotDate.textContent = SNAPSHOT.fetched;
 
+// 页面在 magpie 的沙盒里跑，<html> 上的 data-theme 由 bridge 维护，
+// 这里只把「偏好」换算成实际明暗，写到自己的属性上，不和 bridge 抢。
+function hostTheme() {
+  const dark = globalThis.magpie?.theme?.dark;
+  if (typeof dark === 'boolean') return dark ? 'dark' : 'light';
+  return globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+}
+
+function resolvedTheme() {
+  return state.theme === 'system' ? hostTheme() : state.theme;
+}
+
 function syncPreferenceControls() {
-  document.documentElement.dataset.theme = state.theme;
+  document.documentElement.dataset.msTheme = resolvedTheme();
   listElement.classList.toggle('is-list', state.layout === 'list');
   for (const button of layoutButtons) {
     const active = button.dataset.layout === state.layout;
@@ -89,6 +111,15 @@ function syncPreferenceControls() {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', String(active));
   }
+  for (const button of currencyButtons) {
+    const active = button.dataset.currency === state.currency;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+  const showRate = state.currency === 'cny';
+  rateNote.textContent = showRate ? `1 美元 ≈ ${USD_CNY.rate} 元（${USD_CNY.asOf} 中间价）` : '';
+  rateNote.hidden = !showRate;
+  rateDot.hidden = !showRate;
 }
 
 let lastOptionsWriteAt = 0;
@@ -103,15 +134,15 @@ function flushOptionsWrite() {
   queuedOptionsValue = null;
   lastOptionsWriteAt = Date.now();
   try {
-    const result = options.set(PREFERENCES_KEY, value);
+    const result = options.set(value);
     if (result && typeof result.catch === 'function') result.catch(() => {});
   } catch {
-    // Local storage remains the primary persistence path when the host API is unavailable.
+    // Host options are the persistent store inside magpie; localStorage only covers the browser preview.
   }
 }
 
 function persistPreferences() {
-  const value = { layout: state.layout, theme: state.theme };
+  const value = { layout: state.layout, theme: state.theme, currency: state.currency };
   try {
     globalThis.localStorage?.setItem(PREFERENCES_KEY, JSON.stringify(value));
   } catch {
@@ -128,13 +159,46 @@ function persistPreferences() {
 
 function setPreference(name, value) {
   if (state[name] === value) return;
+  preferencesTouched = true;
   state[name] = value;
   syncPreferenceControls();
   persistPreferences();
-  if (name === 'layout') render();
+  if (name === 'layout' || name === 'currency') render();
 }
 
 syncPreferenceControls();
+
+// 沙盒页面里 localStorage 会抛 SecurityError，正式环境靠 magpie.options 持久化。
+async function loadHostPreferences() {
+  const get = globalThis.magpie?.options?.get;
+  if (typeof get !== 'function') return;
+  let stored;
+  try {
+    stored = await get();
+  } catch {
+    return;
+  }
+  if (!stored || typeof stored !== 'object' || preferencesTouched) return;
+  const next = {
+    layout: validLayouts.has(stored.layout) ? stored.layout : state.layout,
+    theme: validThemes.has(stored.theme) ? stored.theme : state.theme,
+    currency: validCurrencies.has(stored.currency) ? stored.currency : state.currency,
+  };
+  if (next.layout === state.layout && next.theme === state.theme && next.currency === state.currency) return;
+  Object.assign(state, next);
+  syncPreferenceControls();
+  render();
+}
+
+if (typeof globalThis.magpie?.onTheme === 'function') {
+  globalThis.magpie.onTheme(() => {
+    if (state.theme === 'system') syncPreferenceControls();
+  });
+}
+
+globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change', () => {
+  if (state.theme === 'system') syncPreferenceControls();
+});
 
 const dropdowns = {
   lab: {
@@ -279,15 +343,19 @@ function priceOf(model) {
   return PRICES[String(model?.id ?? '')] ?? null;
 }
 
+const PRICE_UNIT = '每百万 token 的输入 / 输出';
+
+function priceTitle(price) {
+  if (!price) return '没有标价';
+  const base = price.official ? '厂商自己的接口价' : '厂商未标价，这是其他接口里最常见的价';
+  if (state.currency !== 'cny') return `${base}，${PRICE_UNIT}`;
+  return `${base}，按 ${USD_CNY.asOf} 中间价 1 美元 ≈ ${USD_CNY.rate} 元换算成人民币，${PRICE_UNIT}`;
+}
+
 function priceMarkup(model) {
   const price = priceOf(model);
-  const label = formatPrice(price);
-  const title = !price
-    ? '没有标价'
-    : price.official
-      ? '厂商自己的接口价，每百万 token 的输入 / 输出'
-      : '厂商未标价，这是其他接口里最常见的价，每百万 token 的输入 / 输出';
-  return `<span class="price-value${price ? '' : ' is-missing'}" title="${title}">${escapeHtml(label)}</span>`;
+  const label = formatPrice(price, state.currency);
+  return `<span class="price-value${price ? '' : ' is-missing'}" title="${priceTitle(price)}">${escapeHtml(label)}</span>`;
 }
 
 function textList(values) {
@@ -366,8 +434,12 @@ function iconMarkup(model) {
   return `<span class="logo-plate" aria-hidden="true"><span class="logo-glyph" style="--icon:url('${spec.src}')"></span></span>`;
 }
 
+const COPY_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
+const COPIED_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12.5 4.6 4.6L19 7.4"></path></svg>';
+
 function rowFor(model, index) {
   const id = String(model.id ?? '');
+  const name = String(model.name || id);
   const expanded = state.expandedId === id;
   const detailId = `model-detail-${index}`;
   return `
@@ -384,6 +456,7 @@ function rowFor(model, index) {
           <span class="model-flags">${flagsFor(model)}</span>
         </span>
       </button>
+      <button class="card-copy" type="button" data-action="copy-name" data-name="${escapeHtml(name)}" aria-label="复制模型名称" title="复制模型名称">${COPY_ICON}</button>
       ${expanded ? detailsFor(model, detailId) : ''}
     </article>`;
 }
@@ -452,6 +525,45 @@ for (const button of themeButtons) {
   button.addEventListener('click', () => setPreference('theme', button.dataset.themeOption));
 }
 
+for (const button of currencyButtons) {
+  button.addEventListener('click', () => setPreference('currency', button.dataset.currency));
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // 沙盒页面的 clipboard API 会以 NotAllowedError 拒绝，退回选区方案。
+    }
+  }
+  const temporary = document.createElement('textarea');
+  temporary.value = value;
+  temporary.setAttribute('readonly', '');
+  temporary.style.position = 'fixed';
+  temporary.style.opacity = '0';
+  document.body.append(temporary);
+  temporary.select();
+  const copied = document.execCommand('copy');
+  temporary.remove();
+  if (!copied) throw new Error('Clipboard unavailable');
+}
+
+function flashCopied(button) {
+  button.innerHTML = COPIED_ICON;
+  button.classList.add('is-copied');
+  button.setAttribute('aria-label', '已复制');
+  button.title = '已复制';
+  setTimeout(() => {
+    if (!button.isConnected) return;
+    button.innerHTML = COPY_ICON;
+    button.classList.remove('is-copied');
+    button.setAttribute('aria-label', '复制模型名称');
+    button.title = '复制模型名称';
+  }, 1400);
+}
+
 listElement.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
@@ -462,27 +574,26 @@ listElement.addEventListener('click', async (event) => {
     return;
   }
   if (button.dataset.action === 'copy') {
-    const id = button.dataset.id;
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(id);
-      } else {
-        const temporary = document.createElement('textarea');
-        temporary.value = id;
-        temporary.setAttribute('readonly', '');
-        temporary.style.position = 'fixed';
-        temporary.style.opacity = '0';
-        document.body.append(temporary);
-        temporary.select();
-        const copied = document.execCommand('copy');
-        temporary.remove();
-        if (!copied) throw new Error('Clipboard unavailable');
-      }
+      await copyText(button.dataset.id);
       button.textContent = '已复制';
     } catch {
       button.textContent = '复制失败';
+    }
+    return;
+  }
+  if (button.dataset.action === 'copy-name') {
+    try {
+      await copyText(button.dataset.name);
+      flashCopied(button);
+    } catch {
+      button.title = '复制失败';
+      setTimeout(() => {
+        if (button.isConnected) button.title = '复制模型名称';
+      }, 1400);
     }
   }
 });
 
 render();
+loadHostPreferences();

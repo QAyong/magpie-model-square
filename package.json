@@ -4,14 +4,22 @@
   "description": "A local model catalog page for Magpie.",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "test": "node --test page/view.test.mjs"
+  },
   "files": [
     "page",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "keywords": [
     "magpie",
+    "magpie-plugin",
     "magpie-page",
-    "models"
+    "models",
+    "ai-models"
   ],
   "magpie": {
     "page": {
@@ -22,6 +30,12 @@
       "file": "page/index.html",
       "icon": "page/icon.svg"
     },
-    "permissions": []
+    "permissions": [],
+    "name": "模型广场",
+    "summary": {
+      "en": "Browse 600+ AI models with CNY and USD pricing, context size and modalities. Works offline.",
+      "zh": "按种类和厂商浏览 600+ 个 AI 模型，查看人民币与美元标价、上下文和模态。完全离线。"
+    },
+    "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNTM2ZDg2IiBzdHJva2Utd2lkdGg9IjEuNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzLjc1IiB5PSIzLjc1IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiByeD0iMS4yNSIvPjxyZWN0IHg9IjE0LjI1IiB5PSIzLjc1IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiByeD0iMS4yNSIvPjxyZWN0IHg9IjMuNzUiIHk9IjE0LjI1IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiByeD0iMS4yNSIvPjxyZWN0IHg9IjE0LjI1IiB5PSIxNC4yNSIgd2lkdGg9IjYiIGhlaWdodD0iNiIgcng9IjEuMjUiLz48L3N2Zz4K"
   }
 }

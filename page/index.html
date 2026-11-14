@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="system">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -37,8 +37,12 @@
                 <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M16.8 12.2A7.2 7.2 0 0 1 7.8 3.1a7.3 7.3 0 1 0 9 9.1Z"></path></svg>
               </button>
             </div>
+            <div class="preference-segments" role="group" aria-label="标价货币">
+              <button class="preference-button currency-button is-active" type="button" data-currency="cny" aria-label="人民币" title="按人民币汇率中间价换算" aria-pressed="true">¥</button>
+              <button class="preference-button currency-button" type="button" data-currency="usd" aria-label="美元" title="models.dev 原始美元标价" aria-pressed="false">$</button>
+            </div>
           </div>
-          <p class="source-note">资料来自 <span>models.dev</span><span class="note-dot">·</span>价格为每百万 token 的输入 / 输出<span class="note-dot">·</span>快照日期：<time id="snapshot-date">—</time></p>
+          <p class="source-note">资料来自 <span>models.dev</span><span class="note-dot">·</span><span>价格为每百万 token 的输入 / 输出</span><span class="note-dot" id="rate-dot" hidden>·</span><span id="rate-note" hidden></span><span class="note-dot">·</span>快照日期：<time id="snapshot-date">—</time></p>
         </div>
       </header>
 
