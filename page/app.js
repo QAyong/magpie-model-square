@@ -2,7 +2,40 @@ import { CATALOG, SNAPSHOT } from './catalog.js';
 import { USD_CNY } from './currency.js';
 import { ICON_LABS } from './icon-index.js';
 import { PRICES } from './prices.js';
-import { filterModels, formatContext, formatPrice, labFor, labs, sortModels } from './view.js';
+import {
+  evidenceFootnote,
+  evidenceLabel,
+  filterModels,
+  formatContext,
+  formatPrice,
+  formatSignal,
+  headlineText,
+  inputOutputPhrase,
+  labFor,
+  labs,
+  panelRows,
+  recommendationSentence,
+  sortModels,
+  sourceNote,
+  taskBasis,
+  taskIds,
+  taskScoreMap,
+} from './view.js';
+
+if (globalThis.magpie && typeof globalThis.magpie.ready === 'function') {
+  globalThis.magpie.ready();
+}
+
+let RANKINGS = null;
+try {
+  RANKINGS = (await import('./rankings.js')).RANKINGS;
+} catch {
+  RANKINGS = null;
+}
+
+function hasRankings() {
+  return Object.values(RANKINGS?.tasks ?? {}).some((task) => Array.isArray(task?.models) && task.models.length > 0);
+}
 
 const COLOR_ICONS = {
   anthropic: 'icons/brand-claude-color.svg',
@@ -32,16 +65,16 @@ const MASK_ICONS = {
   moonshotai: 'icons/brand-kimi.svg',
 };
 
-if (globalThis.magpie && typeof globalThis.magpie.ready === 'function') {
-  globalThis.magpie.ready();
-}
-
 const PAGE_SIZE = 40;
 const $ = (selector) => document.querySelector(selector);
 const listElement = $('#model-list');
 const emptyState = $('#empty-state');
 const moreButton = $('#load-more');
 const countElement = $('#result-count');
+const recommendElement = $('#recommend');
+const taskPill = $('#task-pill');
+const taskPillLabel = $('#task-pill-label');
+const listHint = $('#list-hint');
 const snapshotDate = $('#snapshot-date');
 const searchInput = $('#search');
 const categoryButtons = [...document.querySelectorAll('[data-category]')];
@@ -77,6 +110,10 @@ const state = {
   layout: savedPreferences.layout,
   theme: savedPreferences.theme,
   currency: savedPreferences.currency,
+  task: null,
+  expandedId: null,
+  evidenceTask: null,
+  evidenceFor: null,
   visibleCount: PAGE_SIZE,
 };
 
@@ -215,6 +252,7 @@ const dropdowns = {
     onSelect(value) {
       state.lab = value;
       state.visibleCount = PAGE_SIZE;
+      state.expandedId = null;
       closeModal();
       render();
     },
@@ -227,6 +265,7 @@ const dropdowns = {
       { value: 'latest', label: '最新发布' },
       { value: 'context', label: '上下文' },
       { value: 'name', label: '名称' },
+      ...(hasRankings() ? [{ value: 'task', label: '按推荐分' }] : []),
     ],
     currentValue: () => state.sort,
     onSelect(value) {
@@ -407,6 +446,7 @@ function detailsFor(model, detailId) {
       <dl class="detail-grid">
         <div class="detail-item"><dt>种类</dt><dd>${escapeHtml(categoryLabel(model))}${model?.category === 'chat' && isMultimodal(model) ? '、多模态' : ''}</dd></div>
         <div class="detail-item"><dt>模型 ID</dt><dd class="id-line"><code>${escapeHtml(id)}</code><button class="copy-button" type="button" data-action="copy" data-id="${escapeHtml(id)}">复制</button></dd></div>
+        ${evidenceMarkup(model)}
         <div class="detail-item"><dt>输入模态</dt><dd>${escapeHtml(textList(modalities.input))}</dd></div>
         <div class="detail-item"><dt>输出模态</dt><dd>${escapeHtml(textList(modalities.output))}</dd></div>
         <div class="detail-item"><dt>标价</dt><dd>${priceMarkup(model)}</dd></div>
@@ -439,16 +479,56 @@ function iconMarkup(model) {
 const COPY_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
 const COPIED_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12.5 4.6 4.6L19 7.4"></path></svg>';
 
+function activeTask() {
+  return state.task ? RANKINGS?.tasks?.[state.task] ?? null : null;
+}
+
+function rankRow(id) {
+  return activeTask()?.models?.find((model) => model.id === id) ?? null;
+}
+
+function evidenceTasksFor(model) {
+  const tasks = RANKINGS?.tasks ?? {};
+  const pick = (key) => {
+    const task = tasks[key];
+    const row = task?.models?.find((item) => item.id === model.id);
+    return row ? [[key, task, row]] : [];
+  };
+  if (state.task) return pick(state.task);
+  const showingEvidence = state.evidenceFor === model.id || state.expandedId === model.id;
+  if (!showingEvidence || !state.evidenceTask) return [];
+  const keys = state.evidenceTask === '*' ? Object.keys(tasks) : [state.evidenceTask];
+  return keys.flatMap((key) => pick(key));
+}
+
+function evidenceMarkup(model) {
+  return evidenceTasksFor(model).map(([, task, row]) => {
+    const seen = new Set();
+    const items = [task.headline, ...(task.sources ?? [])].filter((sourceId) => {
+      if (!sourceId || seen.has(sourceId) || !Number.isFinite(Number(row.evidence?.[sourceId]))) return false;
+      seen.add(sourceId);
+      return true;
+    }).map((sourceId) => `<li><span>${escapeHtml(evidenceLabel(sourceId, task, RANKINGS.sources))}</span><span>${escapeHtml(formatSignal(sourceId, row.evidence[sourceId]))}</span></li>`).join('');
+    return `<div class="detail-item detail-evidence"><dt>推荐依据 · ${escapeHtml(task.label)}</dt><dd><ul class="evidence-list">${items}</ul><p class="evidence-note">${escapeHtml(evidenceFootnote(RANKINGS.asOf))}</p></dd></div>`;
+  }).join('');
+}
+
 function rowFor(model) {
   const id = String(model.id ?? '');
   const name = String(model.name || id);
+  const ranked = rankRow(id);
+  const expanded = state.expandedId === id;
+  const badge = ranked ? `<span class="rank-badge" aria-hidden="true">${escapeHtml(ranked.rank)}</span>` : '';
+  const score = ranked ? `<span class="task-score">推荐分 ${escapeHtml(ranked.score)}</span>` : '';
+  const detailId = `detail-${id.replace(/[^A-Za-z0-9_-]+/g, '-')}`;
   return `
-    <article class="model-card">
+    <article class="model-card${expanded ? ' is-expanded' : ''}" data-model-id="${escapeHtml(id)}">
       <button class="model-main" type="button" data-action="open" data-id="${escapeHtml(id)}" aria-haspopup="dialog">
-        ${iconMarkup(model)}
+        <span class="model-mark">${badge}${iconMarkup(model)}</span>
         <span class="model-copy">
           <span class="model-name">${escapeHtml(model.name || id)}</span>
           <span class="model-lab">${escapeHtml(labFor(model))}</span>
+          ${score}
         </span>
         <span class="model-foot">
           ${priceMarkup(model)}
@@ -457,24 +537,147 @@ function rowFor(model) {
         </span>
       </button>
       <button class="card-copy" type="button" data-action="copy-name" data-name="${escapeHtml(name)}" aria-label="复制模型名称" title="复制模型名称">${COPY_ICON}</button>
+      ${expanded ? detailsFor(model, detailId) : ''}
     </article>`;
+}
+
+function featuredMarkup() {
+  const featured = RANKINGS?.featured;
+  const model = featured?.id ? modelById(featured.id) : null;
+  if (!model) return '';
+  const blurb = recommendationSentence(featured.reasons, inputOutputPhrase(priceOf(model), state.currency));
+  const stats = [
+    ['推荐分', featured.score ?? '—'],
+    ['标价', formatPrice(priceOf(model), state.currency)],
+    ['上下文', formatContext(contextOf(model))],
+    ['上榜', featured.taskCount ?? '—'],
+  ];
+  return `<article class="recommend-feature">
+      <p class="feature-kicker"><strong>综合推荐</strong></p>
+      <div class="feature-identity">${iconMarkup(model)}<div class="model-copy"><span class="model-name">${escapeHtml(model.name || model.id)}</span><span class="model-lab">${escapeHtml(labFor(model))}</span></div></div>
+      ${blurb ? `<p class="feature-blurb">${escapeHtml(blurb)}</p>` : ''}
+      <dl class="feature-stats">${stats.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>
+      <div class="feature-actions">
+        <button type="button" data-action="reveal" data-id="${escapeHtml(model.id)}" data-task="*">详情</button>
+        <button type="button" data-action="copy-id" data-id="${escapeHtml(model.id)}">复制 ID</button>
+      </div>
+    </article>`;
+}
+
+function boardMarkup(key, task) {
+  const panel = panelRows(task.models, 5);
+  const rows = panel.rows.map((row) => {
+    const model = modelById(row.id);
+    if (!model) return '';
+    const metric = headlineText(row, task);
+    const name = String(model.name || row.id);
+    return `<button class="board-row" type="button" data-action="reveal" data-id="${escapeHtml(row.id)}" data-task="${escapeHtml(key)}" aria-label="${escapeHtml(`${name}，${metric}，查看详情`)}">
+        <span class="board-rank" aria-hidden="true">${escapeHtml(row.rank)}</span>
+        ${iconMarkup(model)}
+        <span class="board-name">${escapeHtml(name)}</span>
+        <span class="board-metric">${escapeHtml(metric)}</span>
+        <span class="board-detail">详情</span>
+      </button>`;
+  }).join('');
+  const more = panel.showAll
+    ? `<button class="board-all" type="button" data-action="show-task" data-task="${escapeHtml(key)}">查看全部 ${panel.total.toLocaleString('zh-CN')} 个 ›</button>`
+    : '';
+  return `<section class="recommend-board"><header class="board-head"><span class="board-title">${escapeHtml(task.label)}最强</span><span class="board-source">${escapeHtml(sourceNote(task.sources, RANKINGS.sources))}</span></header>${rows}${more}</section>`;
+}
+
+function renderRecommend() {
+  if (!recommendElement) return;
+  const tasks = Object.entries(RANKINGS?.tasks ?? {}).filter(([, task]) => Array.isArray(task?.models) && task.models.length > 0);
+  if (!tasks.length) {
+    recommendElement.hidden = true;
+    recommendElement.innerHTML = '';
+    return;
+  }
+  recommendElement.hidden = false;
+  recommendElement.innerHTML = `<p class="recommend-kicker">榜单快照 <time datetime="${escapeHtml(RANKINGS.asOf)}">${escapeHtml(RANKINGS.asOf)}</time></p><div class="recommend-panels">${featuredMarkup()}${tasks.map(([key, task]) => boardMarkup(key, task)).join('')}</div>`;
+}
+
+function currentModels() {
+  const only = state.task ? new Set(taskIds(RANKINGS, state.task)) : null;
+  const scores = state.sort === 'task' ? taskScoreMap(RANKINGS, state.task) : null;
+  return sortModels(filterModels(CATALOG, state.query, state.category, state.lab, only), state.sort, scores);
+}
+
+function syncCategories() {
+  const locked = Boolean(state.task);
+  for (const button of categoryButtons) {
+    const active = button.dataset.category === state.category;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+    button.disabled = locked && button.dataset.category !== 'chat';
+  }
+}
+
+function enterTask(key) {
+  const task = RANKINGS?.tasks?.[key];
+  if (!task?.models?.length) return;
+  closeOpenDropdown(false);
+  closeModal();
+  state.task = key;
+  state.category = 'chat';
+  state.sort = 'task';
+  state.expandedId = null;
+  state.evidenceTask = key;
+  state.visibleCount = PAGE_SIZE;
+  syncDropdown('sort');
+  render();
+}
+
+function exitTask() {
+  if (!state.task) return;
+  closeModal();
+  if (state.sort === 'task') state.sort = 'latest';
+  state.task = null;
+  state.evidenceTask = null;
+  state.expandedId = null;
+  state.visibleCount = PAGE_SIZE;
+  syncDropdown('sort');
+  render();
+}
+
+function revealModel(id, taskKey, returnFocus) {
+  if (!modelById(id)) return;
+  state.evidenceTask = taskKey || state.task;
+  state.evidenceFor = id;
+  openModal(id, returnFocus);
 }
 
 function render() {
   listElement.classList.toggle('is-list', state.layout === 'list');
-  const filtered = sortModels(
-    filterModels(CATALOG, state.query, state.category, state.lab),
-    state.sort,
-  );
+  renderRecommend();
+  const filtered = currentModels();
+  if (state.expandedId && !filtered.slice(0, state.visibleCount).some((model) => model.id === state.expandedId)) {
+    const index = filtered.findIndex((model) => model.id === state.expandedId);
+    if (index >= 0) state.visibleCount = index + 1;
+    else state.expandedId = null;
+  }
   const visible = filtered.slice(0, state.visibleCount);
   listElement.innerHTML = visible.map(rowFor).join('');
   listElement.hidden = filtered.length === 0;
   emptyState.hidden = filtered.length !== 0;
+  const task = activeTask();
+  if (taskPill) {
+    taskPill.hidden = !task;
+    if (task) {
+      taskPillLabel.textContent = `${task.label} · 上榜 ${task.models.length.toLocaleString('zh-CN')} 个`;
+      taskPill.setAttribute('aria-label', `清除${task.label}筛选`);
+    }
+  }
+  if (listHint) listHint.textContent = task ? taskBasis(task, RANKINGS.sources, RANKINGS.asOf) : '选择一个模型查看详情';
+  emptyState.textContent = task && filtered.length === 0
+    ? `按「${task.label}」推荐 0 个模型。试试清除厂商筛选，或清除任务筛选。`
+    : '没有找到符合条件的模型。';
   countElement.textContent = visible.length < filtered.length
     ? `显示 ${visible.length.toLocaleString('zh-CN')} / ${filtered.length.toLocaleString('zh-CN')} 个模型`
     : `${filtered.length.toLocaleString('zh-CN')} 个模型`;
   moreButton.hidden = visible.length >= filtered.length;
   moreButton.textContent = '继续显示';
+  syncCategories();
   refreshModal();
 }
 
@@ -499,23 +702,48 @@ document.addEventListener('keydown', (event) => {
 searchInput.addEventListener('input', () => {
   state.query = searchInput.value;
   state.visibleCount = PAGE_SIZE;
+  state.expandedId = null;
   closeModal();
   render();
 });
 
 for (const button of categoryButtons) {
   button.addEventListener('click', () => {
+    if (button.disabled || (state.task && button.dataset.category !== 'chat')) return;
     state.category = button.dataset.category;
     state.visibleCount = PAGE_SIZE;
+    state.expandedId = null;
     closeModal();
-    for (const item of categoryButtons) {
-      const active = item === button;
-      item.classList.toggle('is-active', active);
-      item.setAttribute('aria-pressed', String(active));
-    }
     render();
   });
 }
+
+taskPill?.addEventListener('click', () => exitTask());
+
+recommendElement?.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-action]');
+  if (!button || !recommendElement.contains(button)) return;
+  if (button.dataset.action === 'show-task') {
+    enterTask(button.dataset.task);
+    return;
+  }
+  if (button.dataset.action === 'reveal') {
+    revealModel(button.dataset.id, button.dataset.task, button);
+    return;
+  }
+  if (button.dataset.action === 'copy-id') {
+    const previous = button.textContent;
+    try {
+      await copyText(button.dataset.id);
+      button.textContent = '已复制';
+    } catch {
+      button.textContent = '复制失败';
+    }
+    setTimeout(() => {
+      if (button.isConnected) button.textContent = previous;
+    }, 1400);
+  }
+});
 
 moreButton.addEventListener('click', () => {
   state.visibleCount += PAGE_SIZE;
@@ -574,6 +802,7 @@ const modalDialog = modal.querySelector('.dialog');
 const modalBody = $('#model-modal-body');
 const modalTitle = $('#model-modal-title');
 const modalLab = $('#model-modal-lab');
+const modalCopy = $('#model-modal-copy');
 const modalMark = $('#model-modal-mark');
 const SPRING = 'cubic-bezier(.22, 1.2, .36, 1)';
 const IOS_EASE = 'cubic-bezier(.32, .72, 0, 1)';
@@ -664,7 +893,9 @@ function openModal(id, returnFocus) {
   stopModalMotion();
   modal.classList.remove('out');
   openModelId = id;
-  modalTitle.textContent = String(model.name || id);
+  const name = String(model.name || id);
+  modalTitle.textContent = name;
+  if (modalCopy) modalCopy.dataset.name = name;
   modalLab.textContent = labFor(model);
   modalMark.innerHTML = iconMarkup(model);
   modalBody.innerHTML = detailsFor(model, 'model-modal-detail');
@@ -711,6 +942,19 @@ function refreshModal() {
 }
 
 modal.addEventListener('click', async (event) => {
+  const nameCopy = event.target.closest('button[data-action="copy-name"]');
+  if (nameCopy) {
+    try {
+      await copyText(nameCopy.dataset.name);
+      flashCopied(nameCopy);
+    } catch {
+      nameCopy.title = '复制失败';
+      setTimeout(() => {
+        if (nameCopy.isConnected) nameCopy.title = '复制模型名称';
+      }, 1400);
+    }
+    return;
+  }
   const copy = event.target.closest('button[data-action="copy"]');
   if (copy) {
     try {
@@ -743,6 +987,10 @@ listElement.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   if (button.dataset.action === 'open') {
+    if (!state.task) {
+      state.evidenceTask = null;
+      state.evidenceFor = null;
+    }
     openModal(button.dataset.id, button);
     return;
   }

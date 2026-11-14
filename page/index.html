@@ -46,6 +46,8 @@
         </div>
       </header>
 
+      <section class="recommend" id="recommend" hidden aria-label="本期榜单"></section>
+
       <section class="toolbar" aria-label="模型筛选与排序">
         <label class="search-box">
           <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.8" cy="8.8" r="5.8"></circle><path d="m13.2 13.2 4 4"></path></svg>
@@ -90,8 +92,14 @@
       </section>
 
       <div class="list-summary">
-        <p id="result-count" aria-live="polite"></p>
-        <span class="list-hint">选择一个模型查看详情</span>
+        <div class="summary-lead">
+          <button id="task-pill" class="task-pill" type="button" hidden>
+            <span id="task-pill-label"></span>
+            <span class="task-pill-x" aria-hidden="true">×</span>
+          </button>
+          <p id="result-count" aria-live="polite"></p>
+        </div>
+        <span id="list-hint" class="list-hint">选择一个模型查看详情</span>
       </div>
       <section id="model-list" class="model-list" aria-label="模型列表"></section>
       <p id="empty-state" class="empty-state" hidden>没有找到符合条件的模型。</p>
@@ -105,6 +113,9 @@
             <h2 id="model-modal-title"></h2>
             <p id="model-modal-lab"></p>
           </div>
+          <button id="model-modal-copy" class="card-copy modal-copy" type="button" data-action="copy-name" aria-label="复制模型名称" title="复制模型名称">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+          </button>
           <button class="modal-close" type="button" aria-label="关闭">
             <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"></path></svg>
           </button>

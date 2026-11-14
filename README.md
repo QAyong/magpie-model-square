@@ -7,7 +7,8 @@
 - **共 614 个模型**，快照日期 2026-11-14，来自 [models.dev](https://models.dev/models.json)。
 - **标价**：每百万 token 的输入 / 输出。优先取厂商自己接口的非零价；厂商没有价时取其他接口里出现次数最多的价；都没有就显示「未标价」。
 - **人民币**：默认按中国外汇交易中心中间价换算显示，右上角可切回美元原价。换算汇率和日期写在页脚，人民币是估算值，不是厂商报价。
-- **筛选与排序**：搜索名称、ID、描述或厂商；按种类和厂商筛选；按最新发布、上下文或名称排序。
+- **筛选与排序**：搜索名称、ID、描述或厂商；按种类和厂商筛选；按最新发布、上下文、名称或推荐分排序。
+- **本期榜单**：页首按任务推荐模型。编程榜每次同步读取 OpenRouter 公开接口里的 Artificial Analysis 编程指数，这份接口大约每两分钟刷新。Arena、SWE-bench 和 Aider 只在它缺失时补位。推荐分只在当次快照里比较。点「查看全部」后，下方列表只留下该任务的上榜模型。没有榜单数据时，这一块不显示。
 - **布局与主题**：卡片 / 列表，浅色 / 深色 / 跟随系统。
 - **复制**：悬停卡片右上角复制模型名称，详情里可复制模型 ID。
 - **离线**：页面没有网络权限，不联网、不读取账号或对话。数据随版本打包。
@@ -35,7 +36,8 @@ magpie plugin add <仓库地址或包名>
 node scripts/sync.mjs            # 刷新模型、价格和人民币汇率
 node scripts/sync.mjs --rate     # 只刷汇率
 node scripts/sync.mjs --dry-run  # 只打印变化，不写文件
-node --test page/view.test.mjs   # 筛选、排序、价格格式
+node scripts/sync-rankings.mjs    # 刷新编程榜（页面仍离线）
+node --test page/view.test.mjs   # 筛选、排序、价格和榜单格式
 ```
 
 | 路径 | 内容 |
@@ -46,8 +48,10 @@ node --test page/view.test.mjs   # 筛选、排序、价格格式
 | `page/catalog.js` | 模型快照和 `category` |
 | `page/prices.js` | 每百万 token 标价 |
 | `page/currency.js` | 人民币汇率中间价 |
-| `page/view.test.mjs` | 筛选与格式测试 |
-| `scripts/sync.mjs` | 抓取 models.dev 与中间价，重写上面三个数据文件 |
+| `page/rankings.js` | 任务榜单快照；没有或为空时页首推荐区隐藏 |
+| `page/view.test.mjs` | 筛选、格式和榜单测试 |
+| `scripts/sync.mjs` | 抓取 models.dev 与中间价，重写模型、价格和汇率 |
+| `scripts/sync-rankings.mjs` | 抓取 SWE-bench 与 Aider，重写榜单 |
 | `AGENTS.md` | 给后续会话的约定和红线 |
 
 页面在 Magpie 的沙盒里运行：没有网络，`localStorage` 不可用，布局 / 主题 / 币种存在 `magpie.options` 里。

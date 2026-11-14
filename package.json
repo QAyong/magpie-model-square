@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync.mjs",
+    "sync:rankings": "node scripts/sync-rankings.mjs",
     "test": "node --test page/view.test.mjs"
   },
   "files": [
