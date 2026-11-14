@@ -334,11 +334,11 @@ h1 {
 }
 .logo-img { width: 16px; height: 16px; object-fit: contain; }
 .logo-glyph {
+  display: block;
   width: 16px;
   height: 16px;
-  background: var(--fg);
-  -webkit-mask: var(--icon) center / contain no-repeat;
-  mask: var(--icon) center / contain no-repeat;
+  flex: none;
+  color: var(--fg);
 }
 .model-copy { min-width: 0; }
 .model-name {

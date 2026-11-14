@@ -1,6 +1,6 @@
 import { CATALOG, SNAPSHOT } from './catalog.js';
 import { USD_CNY } from './currency.js';
-import { ICON_LABS } from './icon-index.js';
+import { MONO_ICONS } from './mono-icons.js';
 import { PRICES } from './prices.js';
 import {
   evidenceFootnote,
@@ -56,13 +56,6 @@ const COLOR_ICONS = {
   meituan: 'icons/brand-longcat-color.svg',
   'bytedance-seed': 'icons/brand-doubao-color.svg',
   microsoft: 'icons/brand-microsoft-color.svg',
-};
-
-const MASK_ICONS = {
-  openai: 'icons/brand-openai.svg',
-  xai: 'icons/brand-xai.svg',
-  ai21: 'icons/brand-ai21.svg',
-  moonshotai: 'icons/brand-kimi.svg',
 };
 
 const PAGE_SIZE = 40;
@@ -462,19 +455,15 @@ function detailsFor(model, detailId) {
 function iconMarkup(model) {
   const lab = String(model?.id ?? '').split('/')[0].toLowerCase();
   const family = String(model?.family ?? '').toLowerCase();
-  let spec = null;
-  if (lab === 'google' && family.startsWith('gemma')) spec = { type: 'img', src: 'icons/brand-gemma-color.svg' };
-  else if (MASK_ICONS[lab]) spec = { type: 'mask', src: MASK_ICONS[lab] };
-  else if (COLOR_ICONS[lab]) spec = { type: 'img', src: COLOR_ICONS[lab] };
-  else if (ICON_LABS.has(lab)) spec = { type: 'mask', src: `icons/${lab}.svg` };
-  if (!spec) {
-    const letter = [...labFor(model)][0] || '?';
-    return `<span class="logo-plate is-letter" aria-hidden="true">${escapeHtml(letter.toUpperCase())}</span>`;
+  const mono = MONO_ICONS[lab];
+  if (mono) {
+    const svg = mono.replace('<svg', '<svg class="logo-glyph" aria-hidden="true" focusable="false"');
+    return `<span class="logo-plate" aria-hidden="true">${svg}</span>`;
   }
-  if (spec.type === 'img') {
-    return `<span class="logo-plate" aria-hidden="true"><img class="logo-img" src="${spec.src}" alt=""></span>`;
-  }
-  return `<span class="logo-plate" aria-hidden="true"><span class="logo-glyph" style="--icon:url('${spec.src}')"></span></span>`;
+  const src = lab === 'google' && family.startsWith('gemma') ? 'icons/brand-gemma-color.svg' : COLOR_ICONS[lab];
+  if (src) return `<span class="logo-plate" aria-hidden="true"><img class="logo-img" src="${src}" alt=""></span>`;
+  const letter = [...labFor(model)][0] || '?';
+  return `<span class="logo-plate is-letter" aria-hidden="true">${escapeHtml(letter.toUpperCase())}</span>`;
 }
 
 const COPY_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
