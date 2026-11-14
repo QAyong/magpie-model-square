@@ -100,6 +100,9 @@ function resolvedTheme() {
 
 function syncPreferenceControls() {
   document.documentElement.dataset.msTheme = resolvedTheme();
+  // 跟随窗口时用 bridge 写入的 --magpie-*；强制浅色或深色时不能拿宿主当前主题的变量。
+  if (state.theme === 'system') document.documentElement.dataset.msFollow = 'host';
+  else delete document.documentElement.dataset.msFollow;
   listElement.classList.toggle('is-list', state.layout === 'list');
   for (const button of layoutButtons) {
     const active = button.dataset.layout === state.layout;
