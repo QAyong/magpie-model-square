@@ -23,6 +23,8 @@ Magpie 沙盒页面插件。概览、数量和进度见 `README.md`。
 | --- | --- |
 | `node --test page/view.test.mjs` | 筛选、排序、上下文和价格格式 |
 | `node --check page/app.js` | 检查页面脚本语法 |
+| `npm run build` | 用 Bun 构建沙盒兼容的经典脚本，必须提交产物 |
+| `node --test scripts/build.test.mjs` | 构建新鲜度与受限环境启动回归 |
 | `node scripts/sync.mjs` | 刷新模型、价格和汇率（页面仍离线） |
 | `node scripts/sync.mjs --rate` | 只刷人民币汇率中间价 |
 | `node scripts/sync.mjs --dry-run` | 只打印会变什么，不写文件 |
@@ -47,6 +49,6 @@ Magpie 沙盒页面插件。概览、数量和进度见 `README.md`。
 - 布局、主题、币种在正式环境存 `magpie.options`：`get()` 读、`set(单个对象)` 写，每秒最多一次；沙盒里 `localStorage` 抛 `SecurityError`，只能当浏览器预览的兜底。任务筛选、`sort=task` 和展开的卡片不写入 `magpie.options`。
 - 不要往 `<html>` 写 `data-theme`，那是 bridge 的属性；页面用自己的 `data-ms-theme`，`system` 时跟随 `magpie.theme.dark` 或系统配色。
 - 沙盒里 `navigator.clipboard` 会以 `NotAllowedError` 拒绝，复制必须保留 `document.execCommand('copy')` 回退。
-- 页面是 ES module，沙盒里需要宿主发 CORS 头；真机首次安装先确认卡片能渲染，否则把页面模块（含 `rankings.js`）打成一个经典脚本。`rankings.js` 用动态导入，文件缺失时页面退回原来的目录。
+- 发布页必须用 `<script defer src="app.bundle.js">` 加载经典脚本。`app.js` 与数据仍是开发模块，运行 `npm run build`（需 Bun）内联所有依赖与榜单；修改页面 JS 或数据后必须重建并提交 `page/app.bundle.js`，因为 GitHub 安装不会替你构建。`scripts/build.test.mjs` 校验构建新鲜度、经典脚本格式，以及禁止联网/存储的启动、预算和详情交互。
 - `magpie.icon` 只接 https 地址或 data URI，现在是内联的 base64 SVG；换图标要重新生成。
 - 未获明确要求时，不要执行 `magpie plugin add`，不要推送或发布。

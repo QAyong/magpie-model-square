@@ -1,6 +1,6 @@
 {
   "name": "magpie-model-square",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Compare AI models by capability, web generation and budget, fully offline in Magpie.",
   "license": "MIT",
   "repository": {
@@ -11,9 +11,11 @@
   "bugs": "https://github.com/QAyong/magpie-model-square/issues",
   "type": "module",
   "scripts": {
+    "build": "bun scripts/build.mjs",
+    "prepack": "npm run build",
     "sync": "node scripts/sync.mjs",
     "sync:rankings": "node scripts/sync-rankings.mjs",
-    "test": "node --test page/view.test.mjs scripts/aa-rankings.test.mjs scripts/frontend-rankings.test.mjs"
+    "test": "node --test page/view.test.mjs scripts/aa-rankings.test.mjs scripts/frontend-rankings.test.mjs scripts/build.test.mjs"
   },
   "files": [
     "page",
@@ -44,5 +46,8 @@
       "zh": "比较 AI 模型的综合能力、网页表现与预算成本，查看价格、上下文和模态。完全离线。"
     },
     "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+CiAgPGcgc3Ryb2tlPSIjNGY0NmU1IiBzdHJva2Utd2lkdGg9IjIuMiI+CiAgICA8cmVjdCB4PSIyLjc1IiB5PSIyLjc1IiB3aWR0aD0iNy4yNSIgaGVpZ2h0PSI3LjI1IiByeD0iMS43NSIvPgogICAgPHJlY3QgeD0iMi43NSIgeT0iMTQiIHdpZHRoPSI3LjI1IiBoZWlnaHQ9IjcuMjUiIHJ4PSIxLjc1Ii8+CiAgICA8cmVjdCB4PSIxNCIgeT0iMTQiIHdpZHRoPSI3LjI1IiBoZWlnaHQ9IjcuMjUiIHJ4PSIxLjc1Ii8+CiAgPC9nPgogIDxyZWN0IHg9IjEyLjkiIHk9IjEuNjUiIHdpZHRoPSI5LjQ1IiBoZWlnaHQ9IjkuNDUiIHJ4PSIyLjg1IiBmaWxsPSIjODE4Y2Y4Ii8+Cjwvc3ZnPgo="
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4"
   }
 }

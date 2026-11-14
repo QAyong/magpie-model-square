@@ -34,7 +34,12 @@ magpie plugin add github:QAyong/magpie-model-square
 
 ## 开发
 
+页面源码使用 ES module；发布时通过 Bun 合并为 `page/app.bundle.js` 经典脚本，以兼容 Magpie 页面沙盒。修改页面脚本或数据后需重建并提交产物；GitHub 安装直接使用已提交的文件。
+
 ```sh
+npm install                    # 开发测试依赖
+npm run build                  # 需要 Bun；构建发布页
+npm test                       # 含受限环境启动回归
 node scripts/sync.mjs            # 刷新模型、价格和人民币汇率
 node scripts/sync.mjs --rate     # 只刷汇率
 node scripts/sync.mjs --dry-run  # 只打印变化，不写文件
