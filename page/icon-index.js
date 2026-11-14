@@ -1,0 +1,1 @@
+export const ICON_LABS = new Set(["ai21", "alibaba", "anthropic", "cohere", "deepseek", "google", "inception", "liquid", "meta", "minimax", "mistral", "moonshotai", "nvidia", "openai", "perplexity", "poolside", "reflection", "stepfun", "thinkingmachines", "vispark", "vivgrid", "xai", "xiaomi", "zhipuai"]);

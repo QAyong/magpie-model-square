@@ -1,0 +1,27 @@
+{
+  "name": "magpie-model-square",
+  "version": "0.1.0",
+  "description": "A local model catalog page for Magpie.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "page",
+    "README.md"
+  ],
+  "keywords": [
+    "magpie",
+    "magpie-page",
+    "models"
+  ],
+  "magpie": {
+    "page": {
+      "title": "Models",
+      "titles": {
+        "zh": "模型广场"
+      },
+      "file": "page/index.html",
+      "icon": "page/icon.svg"
+    },
+    "permissions": []
+  }
+}
