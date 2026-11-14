@@ -78,7 +78,6 @@ const state = {
   theme: savedPreferences.theme,
   currency: savedPreferences.currency,
   visibleCount: PAGE_SIZE,
-  expandedId: null,
 };
 
 // 用户自己改过之后，异步到达的宿主选项不再覆盖他的选择。
@@ -216,7 +215,7 @@ const dropdowns = {
     onSelect(value) {
       state.lab = value;
       state.visibleCount = PAGE_SIZE;
-      state.expandedId = null;
+      closeModal();
       render();
     },
   },
@@ -440,14 +439,12 @@ function iconMarkup(model) {
 const COPY_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>';
 const COPIED_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12.5 4.6 4.6L19 7.4"></path></svg>';
 
-function rowFor(model, index) {
+function rowFor(model) {
   const id = String(model.id ?? '');
   const name = String(model.name || id);
-  const expanded = state.expandedId === id;
-  const detailId = `model-detail-${index}`;
   return `
-    <article class="model-card${expanded ? ' is-expanded' : ''}">
-      <button class="model-main" type="button" data-action="toggle" data-id="${escapeHtml(id)}" aria-expanded="${expanded}" aria-controls="${detailId}">
+    <article class="model-card">
+      <button class="model-main" type="button" data-action="open" data-id="${escapeHtml(id)}" aria-haspopup="dialog">
         ${iconMarkup(model)}
         <span class="model-copy">
           <span class="model-name">${escapeHtml(model.name || id)}</span>
@@ -460,7 +457,6 @@ function rowFor(model, index) {
         </span>
       </button>
       <button class="card-copy" type="button" data-action="copy-name" data-name="${escapeHtml(name)}" aria-label="复制模型名称" title="复制模型名称">${COPY_ICON}</button>
-      ${expanded ? detailsFor(model, detailId) : ''}
     </article>`;
 }
 
@@ -479,12 +475,18 @@ function render() {
     : `${filtered.length.toLocaleString('zh-CN')} 个模型`;
   moreButton.hidden = visible.length >= filtered.length;
   moreButton.textContent = '继续显示';
+  refreshModal();
 }
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && openDropdownName) {
     event.preventDefault();
     closeOpenDropdown(true);
+    return;
+  }
+  if (event.key === 'Escape' && !modal.hidden) {
+    event.preventDefault();
+    closeModal();
     return;
   }
   const tagName = event.target?.tagName;
@@ -497,7 +499,7 @@ document.addEventListener('keydown', (event) => {
 searchInput.addEventListener('input', () => {
   state.query = searchInput.value;
   state.visibleCount = PAGE_SIZE;
-  state.expandedId = null;
+  closeModal();
   render();
 });
 
@@ -505,7 +507,7 @@ for (const button of categoryButtons) {
   button.addEventListener('click', () => {
     state.category = button.dataset.category;
     state.visibleCount = PAGE_SIZE;
-    state.expandedId = null;
+    closeModal();
     for (const item of categoryButtons) {
       const active = item === button;
       item.classList.toggle('is-active', active);
@@ -567,13 +569,181 @@ function flashCopied(button) {
   }, 1400);
 }
 
+const modal = $('#model-modal');
+const modalDialog = modal.querySelector('.dialog');
+const modalBody = $('#model-modal-body');
+const modalTitle = $('#model-modal-title');
+const modalLab = $('#model-modal-lab');
+const modalMark = $('#model-modal-mark');
+const SPRING = 'cubic-bezier(.22, 1.2, .36, 1)';
+const IOS_EASE = 'cubic-bezier(.32, .72, 0, 1)';
+const MORPH_REST = 'inset(-100px round 14px)';
+const VEIL_OFF = { backgroundColor: 'rgba(0, 0, 0, 0)', backdropFilter: 'blur(0px) saturate(1)', webkitBackdropFilter: 'blur(0px) saturate(1)' };
+let openModelId = null;
+let modalReturn = null;
+let modalOrigin = null;
+let modalDone = null;
+
+function calm() {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+}
+
+function modelById(id) {
+  return CATALOG.find((model) => String(model.id ?? '') === id);
+}
+
+function unveil(node) {
+  for (const prop of ['opacity', 'background-color', 'backdrop-filter', '-webkit-backdrop-filter']) node.style.removeProperty(prop);
+}
+
+function fromRect(from, to) {
+  const scale = Math.max(0.3, Math.min(1, from.width / to.width));
+  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+  const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  return `translate(${dx}px, ${dy}px) scale(${scale})`;
+}
+
+function morphFrom(from, to) {
+  const scale = Math.max(0.3, Math.min(1, from.width / to.width));
+  const width = Math.min(to.width, from.width / scale);
+  const height = Math.min(to.height, from.height / scale);
+  const radius = Math.min(10, from.height / 2) / scale;
+  return {
+    transform: fromRect(from, to),
+    clipPath: `inset(${(to.height - height) / 2}px ${(to.width - width) / 2}px round ${radius}px)`,
+  };
+}
+
+function stopModalMotion() {
+  modalDone = null;
+  for (const anim of [...modal.getAnimations(), ...modalDialog.getAnimations()]) anim.cancel();
+}
+
+function closeModal() {
+  if (modal.hidden || modal.classList.contains('out')) return;
+  stopModalMotion();
+  modal.classList.add('out');
+  const was = modalDialog.style.transform;
+  modalDialog.style.transform = 'none';
+  const to = modalDialog.getBoundingClientRect();
+  const from = calm() ? null : modalOrigin;
+  modalDialog.style.transform = was;
+  const clip = modalDialog.style.clipPath || MORPH_REST;
+  const shape = { duration: from ? 380 : 260, easing: IOS_EASE, fill: 'forwards' };
+  const moves = [
+    modal.animate([VEIL_OFF], { ...shape, easing: 'ease-out' }),
+    calm()
+      ? modalDialog.animate([{ opacity: 0 }], { duration: 140, fill: 'forwards' })
+      : modalDialog.animate(from ? [{ transform: was || 'none', clipPath: clip }, morphFrom(from, to)] : [{ transform: 'translateY(14px) scale(.95)' }], shape),
+  ];
+  if (!calm()) {
+    moves.push(modalDialog.animate(
+      [{ offset: from ? 0.6 : 0.2, opacity: getComputedStyle(modalDialog).opacity, easing: 'ease-in' }, { opacity: 0 }],
+      { ...shape, easing: 'linear' },
+    ));
+  }
+  const done = modalDone = Promise.all(moves.map((anim) => anim.finished)).then(() => {
+    if (modalDone !== done) return;
+    modalDone = null;
+    modal.hidden = true;
+    modal.classList.remove('out');
+    openModelId = null;
+    modalDialog.style.opacity = modalDialog.style.transform = modalDialog.style.clipPath = '';
+    unveil(modal);
+    const back = modalReturn;
+    modalReturn = null;
+    modalOrigin = null;
+    back?.focus();
+  }, () => {});
+}
+
+function openModal(id, returnFocus) {
+  const model = modelById(id);
+  if (!model) return;
+  closeOpenDropdown(false);
+  stopModalMotion();
+  modal.classList.remove('out');
+  openModelId = id;
+  modalTitle.textContent = String(model.name || id);
+  modalLab.textContent = labFor(model);
+  modalMark.innerHTML = iconMarkup(model);
+  modalBody.innerHTML = detailsFor(model, 'model-modal-detail');
+  const origin = returnFocus?.getBoundingClientRect?.();
+  modal.hidden = false;
+  if (!modalReturn) modalReturn = returnFocus;
+  modalDialog.style.opacity = modalDialog.style.transform = modalDialog.style.clipPath = '';
+  unveil(modal);
+  const to = modalDialog.getBoundingClientRect();
+  const from = origin && origin.width ? { left: origin.left, top: origin.top, width: origin.width, height: origin.height } : null;
+  modalOrigin = from;
+  modal.animate([{ ...VEIL_OFF, offset: 0 }], { duration: 280, easing: 'ease-out' });
+  if (calm()) {
+    modalDialog.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
+  } else {
+    const grow = modalDialog.animate(
+      from ? [morphFrom(from, to), { transform: 'none', clipPath: MORPH_REST }] : [{ transform: 'translateY(24px) scale(.94)' }, { transform: 'none' }],
+      { duration: 570, easing: SPRING },
+    );
+    modalDialog.animate([{ opacity: 0 }, { opacity: 1 }], { duration: from ? 140 : 240, easing: 'ease-out' });
+    if (from) {
+      const x0 = modalDialog.offsetLeft;
+      const y0 = modalDialog.offsetTop;
+      const follow = new ResizeObserver(() => {
+        const now = { left: to.left + modalDialog.offsetLeft - x0, top: to.top + modalDialog.offsetTop - y0, width: modalDialog.offsetWidth, height: modalDialog.offsetHeight };
+        grow.effect.setKeyframes([morphFrom(from, now), { transform: 'none', clipPath: MORPH_REST }]);
+      });
+      follow.observe(modalDialog);
+      const stop = () => follow.disconnect();
+      grow.finished.then(stop, stop);
+    }
+  }
+  modal.querySelector('.modal-close')?.focus();
+}
+
+function refreshModal() {
+  if (modal.hidden || modal.classList.contains('out') || !openModelId) return;
+  const model = modelById(openModelId);
+  if (!model) {
+    closeModal();
+    return;
+  }
+  modalBody.innerHTML = detailsFor(model, 'model-modal-detail');
+}
+
+modal.addEventListener('click', async (event) => {
+  const copy = event.target.closest('button[data-action="copy"]');
+  if (copy) {
+    try {
+      await copyText(copy.dataset.id);
+      copy.textContent = '已复制';
+    } catch {
+      copy.textContent = '复制失败';
+    }
+    return;
+  }
+  if (event.target === modal || event.target.closest('.modal-close')) closeModal();
+});
+
+modal.addEventListener('keydown', (event) => {
+  if (event.key !== 'Tab') return;
+  const items = [...modal.querySelectorAll('button')].filter((item) => !item.disabled);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+
 listElement.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
-  if (button.dataset.action === 'toggle') {
-    const id = button.dataset.id;
-    state.expandedId = state.expandedId === id ? null : id;
-    render();
+  if (button.dataset.action === 'open') {
+    openModal(button.dataset.id, button);
     return;
   }
   if (button.dataset.action === 'copy') {
