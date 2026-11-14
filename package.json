@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Compare AI models by capability, web generation and budget, fully offline in Magpie.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QAyong/magpie-model-square.git"
+  },
+  "homepage": "https://github.com/QAyong/magpie-model-square#readme",
+  "bugs": "https://github.com/QAyong/magpie-model-square/issues",
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync.mjs",

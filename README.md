@@ -17,13 +17,13 @@
 
 ## 安装
 
-在 Magpie 的「设置 → 插件 → 发现」里搜索安装，或在终端：
+通过 [GitHub 仓库](https://github.com/QAyong/magpie-model-square) 安装，或在终端运行：
 
 ```sh
-magpie plugin add <仓库地址或包名>
+magpie plugin add github:QAyong/magpie-model-square
 ```
 
-装好后侧边栏出现「模型广场」。
+装好后侧边栏出现「模型广场」。在发现页的「非官方插件 · GitHub」分类中也可查找；发现列表可能需要等待索引刷新。
 
 ## 数据说明
 
